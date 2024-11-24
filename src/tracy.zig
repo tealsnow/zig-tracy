@@ -130,13 +130,10 @@ pub inline fn initZone(comptime src: std.builtin.SourceLocation, comptime opts: 
             .name = if (opts.name) |name| name.ptr else null,
             .function = src.fn_name.ptr,
             .file = src.file,
-            .line = 0,
+            .line = src.line,
             .color = opts.color orelse 0,
         };
     };
-
-    // src.line magically is not comptime https://github.com/ziglang/zig/pull/12016#issuecomment-1178092847
-    static.src_loc.line = src.line;
 
     if (!options.tracy_no_callstack) {
         if (options.tracy_callstack) |depth| {

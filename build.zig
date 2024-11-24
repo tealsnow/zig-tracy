@@ -52,10 +52,8 @@ pub fn build(b: *std.Build) void {
     options.addOption(bool, "tracy_timer_fallback", tracy_timer_fallback);
     options.addOption(bool, "shared", shared);
 
-    const tracy_src = b.dependency("tracy_src", .{});
-
     const tracy_module = b.addModule("tracy", .{
-        .root_source_file = .{ .path = "./src/tracy.zig" },
+        .root_source_file = b.path("./src/tracy.zig"),
         .imports = &.{
             .{
                 .name = "tracy-options",
@@ -64,7 +62,7 @@ pub fn build(b: *std.Build) void {
         },
     });
 
-    tracy_module.addIncludePath(tracy_src.path("./public"));
+    tracy_module.addIncludePath(b.path("./tracy/public"));
 
     const tracy_client = if (shared) b.addSharedLibrary(.{
         .name = "tracy",
@@ -82,12 +80,12 @@ pub fn build(b: *std.Build) void {
     }
     tracy_client.linkLibCpp();
     tracy_client.addCSourceFile(.{
-        .file = tracy_src.path("./public/TracyClient.cpp"),
+        .file = b.path("./tracy/public/TracyClient.cpp"),
         .flags = &.{},
     });
     inline for (tracy_header_files) |header| {
         tracy_client.installHeader(
-            tracy_src.path(header[0]),
+            b.path("./tracy/" ++ header[0]),
             header[1],
         );
     }
