@@ -11,11 +11,15 @@ pub fn main() !void {
     tracy.setThreadName("Main");
     defer tracy.message("Graceful main thread exit");
 
-    try std.posix.sigaction(std.posix.SIG.INT, &.{
-        .handler = .{ .handler = handleSigInt },
-        .mask = std.posix.empty_sigset,
-        .flags = 0,
-    }, null);
+    std.posix.sigaction(
+        std.posix.SIG.INT,
+        &.{
+            .handler = .{ .handler = handleSigInt },
+            .mask = std.posix.empty_sigset,
+            .flags = 0,
+        },
+        null,
+    );
 
     const other_thread = try std.Thread.spawn(.{}, otherThread, .{});
     defer other_thread.join();
