@@ -34,6 +34,8 @@ pub fn build(b: *std.Build) void {
     const tracy_timer_fallback = option(b, options, bool, "tracy_timer_fallback", "Use lower resolution timers", false);
     const shared = option(b, options, bool, "shared", "Build the tracy client as a shared libary", false);
 
+    const c_tracy = b.dependency("tracy_lib", .{});
+
     const mod = b.addModule("tracy", .{
         .root_source_file = b.path("src/tracy.zig"),
         .target = target,
@@ -46,7 +48,7 @@ pub fn build(b: *std.Build) void {
         },
     });
 
-    mod.addIncludePath(b.path("./tracy/public"));
+    mod.addIncludePath(c_tracy.path("public"));
 
     if (target.result.os.tag == .windows) {
         mod.linkSystemLibrary("dbghelp", .{ .needed = true });
@@ -54,7 +56,7 @@ pub fn build(b: *std.Build) void {
     }
     mod.link_libcpp = true;
     mod.addCSourceFile(.{
-        .file = b.path("./tracy/public/TracyClient.cpp"),
+        .file = c_tracy.path("public/TracyClient.cpp"),
     });
 
     if (tracy_enable) mod.addCMacro("TRACY_ENABLE", "");
