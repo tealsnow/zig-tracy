@@ -61,7 +61,7 @@ pub fn build(b: *std.Build) void {
 
     if (tracy_enable) mod.addCMacro("TRACY_ENABLE", "");
     if (tracy_on_demand) mod.addCMacro("TRACY_ON_DEMAND", "");
-    if (tracy_callstack) |depth| mod.addCMacro("TRACY_CALLSTACK", "\"" ++ digits2(depth) ++ "\"");
+    if (tracy_callstack) |depth| mod.addCMacro(b.fmt("TRACY_CALLSTACK \"{d}\"", .{depth}), "");
     if (tracy_no_callstack) mod.addCMacro("TRACY_NO_CALLSTACK", "");
     if (tracy_no_callstack_inlines) mod.addCMacro("TRACY_NO_CALLSTACK_INLINES", "");
     if (tracy_only_localhost) mod.addCMacro("TRACY_ONLY_LOCALHOST", "");
@@ -102,17 +102,4 @@ pub fn option(
     const opt = b.option(T, name_raw, description_raw) orelse default;
     options.addOption(T, name_raw, opt);
     return opt;
-}
-
-/// Returns a [2]u8 array containing the two ASCII digit characters
-/// corresponding to the input `value`.
-///
-/// Uses a compile-time generated string lookup table (LUT) containing "00" through "99".
-/// Assumes `value` is less than 100.
-fn digits2(value: usize) [2]u8 {
-    return ("0001020304050607080910111213141516171819" ++
-        "2021222324252627282930313233343536373839" ++
-        "4041424344454647484950515253545556575859" ++
-        "6061626364656667686970717273747576777879" ++
-        "8081828384858687888990919293949596979899")[value * 2 ..][0..2].*;
 }

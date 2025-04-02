@@ -1,10 +1,10 @@
 const std = @import("std");
 const builtin = @import("builtin");
-const options = @import("tracy-options");
+pub const options = @import("tracy-options");
 const c = @cImport({
     if (options.tracy_enable) @cDefine("TRACY_ENABLE", {});
     if (options.tracy_on_demand) @cDefine("TRACY_ON_DEMAND", {});
-    if (options.tracy_callstack) |depth| @cDefine("TRACY_CALLSTACK", "\"" ++ digits2(depth) ++ "\"");
+    if (options.tracy_callstack) |depth| @cDefine(std.fmt.comptimePrint("TRACY_CALLSTACK \"{d}\"", .{depth}), {});
     if (options.tracy_no_callstack) @cDefine("TRACY_NO_CALLSTACK", {});
     if (options.tracy_no_callstack_inlines) @cDefine("TRACY_NO_CALLSTACK_INLINES", {});
     if (options.tracy_only_localhost) @cDefine("TRACY_ONLY_LOCALHOST", {});
@@ -86,43 +86,37 @@ pub const ZoneOptions = struct {
     color: ?u32 = null,
 };
 
-const ZoneContext = if (options.tracy_enable) extern struct {
+const ZoneContext = struct {
     ctx: c.___tracy_c_zone_context,
 
-    pub inline fn deinit(zone: *const ZoneContext) void {
+    pub inline fn deinit(zone: ZoneContext) void {
         if (!options.tracy_enable) return;
         c.___tracy_emit_zone_end(zone.ctx);
     }
 
-    pub inline fn name(zone: *const ZoneContext, zone_name: []const u8) void {
+    pub inline fn name(zone: ZoneContext, zone_name: []const u8) void {
         if (!options.tracy_enable) return;
         c.___tracy_emit_zone_name(zone.ctx, zone_name.ptr, zone_name.len);
     }
 
-    pub inline fn text(zone: *const ZoneContext, zone_text: []const u8) void {
+    pub inline fn text(zone: ZoneContext, zone_text: []const u8) void {
         if (!options.tracy_enable) return;
         c.___tracy_emit_zone_text(zone.ctx, zone_text.ptr, zone_text.len);
     }
 
-    pub inline fn color(zone: *const ZoneContext, zone_color: u32) void {
+    pub inline fn color(zone: ZoneContext, zone_color: u32) void {
         if (!options.tracy_enable) return;
         c.___tracy_emit_zone_color(zone.ctx, zone_color);
     }
 
-    pub inline fn value(zone: *const ZoneContext, zone_value: u64) void {
+    pub inline fn value(zone: ZoneContext, zone_value: u64) void {
         if (!options.tracy_enable) return;
         c.___tracy_emit_zone_value(zone.ctx, zone_value);
     }
-} else struct {
-    pub inline fn deinit(_: *const ZoneContext) void {}
-    pub inline fn name(_: *const ZoneContext, _: []const u8) void {}
-    pub inline fn text(_: *const ZoneContext, _: []const u8) void {}
-    pub inline fn color(_: *const ZoneContext, _: u32) void {}
-    pub inline fn value(_: *const ZoneContext, _: u64) void {}
 };
 
 pub inline fn initZone(comptime src: std.builtin.SourceLocation, opts: ZoneOptions) ZoneContext {
-    if (!options.tracy_enable) return .{};
+    if (!options.tracy_enable) return undefined;
     const active: c_int = @intFromBool(opts.active);
 
     const src_loc = c.___tracy_source_location_data{
@@ -242,6 +236,7 @@ pub inline fn printAppInfo(comptime fmt: []const u8, args: anytype) void {
     c.___tracy_emit_message_appinfo(written.ptr, written.len);
 }
 
+// @TODO: Add explicit support for area allocators when the discard emit comes out in stable tracy
 pub const TracingAllocator = struct {
     parent_allocator: std.mem.Allocator,
     pool_name: ?[:0]const u8,
@@ -264,6 +259,8 @@ pub const TracingAllocator = struct {
     }
 
     pub fn allocator(self: *Self) std.mem.Allocator {
+        if (!options.tracy_enable) return self.parent_allocator;
+
         return .{
             .ptr = self,
             .vtable = &.{
@@ -325,16 +322,3 @@ pub const TracingAllocator = struct {
         }
     }
 };
-
-/// Returns a [2]u8 array containing the two ASCII digit characters
-/// corresponding to the input `value`.
-///
-/// Uses a compile-time generated string lookup table (LUT) containing "00" through "99".
-/// Assumes `value` is less than 100.
-fn digits2(value: usize) [2]u8 {
-    return ("0001020304050607080910111213141516171819" ++
-        "2021222324252627282930313233343536373839" ++
-        "4041424344454647484950515253545556575859" ++
-        "6061626364656667686970717273747576777879" ++
-        "8081828384858687888990919293949596979899")[value * 2 ..][0..2].*;
-}
