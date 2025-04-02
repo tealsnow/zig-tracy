@@ -28,7 +28,7 @@ const c = @cImport({
     @cInclude("tracy/TracyC.h");
 });
 
-pub inline fn setThreadName(comptime name: [:0]const u8) void {
+pub inline fn setThreadName(name: [:0]const u8) void {
     if (!options.tracy_enable) return;
     c.___tracy_set_thread_name(name);
 }
@@ -55,7 +55,7 @@ pub inline fn frameMark() void {
     c.___tracy_emit_frame_mark(null);
 }
 
-pub inline fn frameMarkNamed(comptime name: [:0]const u8) void {
+pub inline fn frameMarkNamed(name: [:0]const u8) void {
     if (!options.tracy_enable) return;
     c.___tracy_emit_frame_mark(name);
 }
@@ -77,7 +77,7 @@ pub inline fn initDiscontinuousFrame(comptime name: [:0]const u8) DiscontinuousF
 
 pub inline fn frameImage(image: *anyopaque, width: u16, height: u16, offset: u8, flip: bool) void {
     if (!options.tracy_enable) return;
-    c.___tracy_emit_frame_mark_image(image, width, height, offset, @as(c_int, @intFromBool(flip)));
+    c.___tracy_emit_frame_image(image, width, height, offset, @as(c_int, @intFromBool(flip)));
 }
 
 pub const ZoneOptions = struct {
@@ -121,44 +121,42 @@ const ZoneContext = if (options.tracy_enable) extern struct {
     pub inline fn value(_: *const ZoneContext, _: u64) void {}
 };
 
-pub inline fn initZone(comptime src: std.builtin.SourceLocation, comptime opts: ZoneOptions) ZoneContext {
+pub inline fn initZone(comptime src: std.builtin.SourceLocation, opts: ZoneOptions) ZoneContext {
     if (!options.tracy_enable) return .{};
     const active: c_int = @intFromBool(opts.active);
 
-    const static = struct {
-        var src_loc = c.___tracy_source_location_data{
-            .name = if (opts.name) |name| name.ptr else null,
-            .function = src.fn_name.ptr,
-            .file = src.file,
-            .line = src.line,
-            .color = opts.color orelse 0,
-        };
+    const src_loc = c.___tracy_source_location_data{
+        .name = if (opts.name) |name| name.ptr else null,
+        .function = src.fn_name.ptr,
+        .file = src.file,
+        .line = src.line,
+        .color = opts.color orelse 0,
     };
 
     if (!options.tracy_no_callstack) {
         if (options.tracy_callstack) |depth| {
             return .{
-                .ctx = c.___tracy_emit_zone_begin_callstack(&static.src_loc, depth, active),
+                .ctx = c.___tracy_emit_zone_begin_callstack(&src_loc, depth, active),
             };
         }
     }
 
     return .{
-        .ctx = c.___tracy_emit_zone_begin(&static.src_loc, active),
+        .ctx = c.___tracy_emit_zone_begin(&src_loc, active),
     };
 }
 
-pub inline fn plot(comptime T: type, comptime name: [:0]const u8, value: T) void {
+pub inline fn plot(comptime T: type, name: [:0]const u8, value: T) void {
     if (!options.tracy_enable) return;
 
     const type_info = @typeInfo(T);
     switch (type_info) {
-        .Int => |int_type| {
+        .int => |int_type| {
             if (int_type.bits > 64) @compileError("Too large int to plot");
             if (int_type.signedness == .unsigned and int_type.bits > 63) @compileError("Too large unsigned int to plot");
             c.___tracy_emit_plot_int(name, value);
         },
-        .Float => |float_type| {
+        .float => |float_type| {
             if (float_type.bits <= 32) {
                 c.___tracy_emit_plot_float(name, value);
             } else if (float_type.bits <= 64) {
@@ -171,11 +169,11 @@ pub inline fn plot(comptime T: type, comptime name: [:0]const u8, value: T) void
     }
 }
 
-pub const PlotType = enum(c_int) {
-    Number,
-    Memory,
-    Percentage,
-    Watt,
+pub const PlotType = enum(c.TracyPlotFormatEnum) {
+    Number = c.TracyPlotFormatNumber,
+    Memory = c.TracyPlotFormatMemory,
+    Percentage = c.TracyPlotFormatPercentage,
+    Watt = c.TracyPlotFormatWatt,
 };
 
 pub const PlotConfig = struct {
@@ -185,7 +183,7 @@ pub const PlotConfig = struct {
     color: u32,
 };
 
-pub inline fn plotConfig(comptime name: [:0]const u8, comptime config: PlotConfig) void {
+pub inline fn plotConfig(name: [:0]const u8, config: PlotConfig) void {
     if (!options.tracy_enable) return;
     c.___tracy_emit_plot_config(
         name,
@@ -196,13 +194,13 @@ pub inline fn plotConfig(comptime name: [:0]const u8, comptime config: PlotConfi
     );
 }
 
-pub inline fn message(comptime msg: [:0]const u8) void {
+pub inline fn message(msg: [:0]const u8) void {
     if (!options.tracy_enable) return;
     const depth = options.tracy_callstack orelse 0;
     c.___tracy_emit_messageL(msg, depth);
 }
 
-pub inline fn messageColor(comptime msg: [:0]const u8, color: u32) void {
+pub inline fn messageColor(msg: [:0]const u8, color: u32) void {
     if (!options.tracy_enable) return;
     const depth = options.tracy_callstack orelse 0;
     c.___tracy_emit_messageLC(msg, color, depth);
@@ -258,7 +256,7 @@ pub const TracingAllocator = struct {
         };
     }
 
-    pub fn initNamed(comptime pool_name: [:0]const u8, parent_allocator: std.mem.Allocator) Self {
+    pub fn initNamed(pool_name: [:0]const u8, parent_allocator: std.mem.Allocator) Self {
         return .{
             .parent_allocator = parent_allocator,
             .pool_name = pool_name,
