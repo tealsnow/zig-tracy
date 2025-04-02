@@ -1,6 +1,6 @@
 .{
     .name = .tracy,
-    .version = "0.0.7",
+    .version = "0.0.8",
     .fingerprint = 0x255a89ee9b3d7e0e, // Changing this has security and trust implications.
     .minimum_zig_version = "0.14.0",
     .dependencies = .{
