@@ -87,7 +87,7 @@ pub const ZoneOptions = struct {
 };
 
 pub const ZoneContext = struct {
-    ctx: c.___tracy_c_zone_context,
+    ctx: if (options.tracy_enable) c.___tracy_c_zone_context else void,
 
     pub inline fn end(zone: ZoneContext) void {
         if (!options.tracy_enable) return;
@@ -116,7 +116,7 @@ pub const ZoneContext = struct {
 };
 
 pub inline fn beginZone(comptime src: std.builtin.SourceLocation, opts: ZoneOptions) ZoneContext {
-    if (!options.tracy_enable) return undefined;
+    if (!options.tracy_enable) return .{ .ctx = void{} };
     const active: c_int = @intFromBool(opts.active);
 
     const src_loc = c.___tracy_source_location_data{
@@ -148,13 +148,13 @@ pub inline fn plot(comptime T: type, name: [:0]const u8, value: T) void {
         .int => |int_type| {
             if (int_type.bits > 64) @compileError("Too large int to plot");
             if (int_type.signedness == .unsigned and int_type.bits > 63) @compileError("Too large unsigned int to plot");
-            c.___tracy_emit_plot_int(name, value);
+            c.___tracy_emit_plot_int(name, @intCast(value));
         },
         .float => |float_type| {
             if (float_type.bits <= 32) {
-                c.___tracy_emit_plot_float(name, value);
+                c.___tracy_emit_plot_float(name, @floatCast(value));
             } else if (float_type.bits <= 64) {
-                c.___tracy_emit_plot(name, value);
+                c.___tracy_emit_plot(name, @floatCast(value));
             } else {
                 @compileError("Too large float to plot");
             }
@@ -246,15 +246,15 @@ pub const TracingAllocator = struct {
 
     pub fn init(backing_allocator: std.mem.Allocator) Self {
         return .{
-            .parent_allocator = backing_allocator,
+            .backing_allocator = backing_allocator,
             .pool_name = null,
         };
     }
 
-    pub fn initNamed(pool_name: [:0]const u8, parent_allocator: std.mem.Allocator) Self {
+    pub fn initNamed(pool_name: [:0]const u8, backing_allocator: std.mem.Allocator) Self {
         return .{
             .pool_name = pool_name,
-            .parent_allocator = parent_allocator,
+            .backing_allocator = backing_allocator,
         };
     }
 
