@@ -60,16 +60,16 @@ pub inline fn frameMarkNamed(name: [:0]const u8) void {
     c.___tracy_emit_frame_mark(name);
 }
 
-const DiscontinuousFrame = struct {
+pub const DiscontinuousFrame = struct {
     name: [:0]const u8,
 
-    pub inline fn deinit(frame: *const DiscontinuousFrame) void {
+    pub inline fn end(frame: *const DiscontinuousFrame) void {
         if (!options.tracy_enable) return;
         c.___tracy_emit_frame_mark_end(frame.name);
     }
 };
 
-pub inline fn initDiscontinuousFrame(comptime name: [:0]const u8) DiscontinuousFrame {
+pub inline fn startDiscontinuousFrame(comptime name: [:0]const u8) DiscontinuousFrame {
     if (!options.tracy_enable) return .{ .name = name };
     c.___tracy_emit_frame_mark_start(name);
     return .{ .name = name };
@@ -86,10 +86,10 @@ pub const ZoneOptions = struct {
     color: ?u32 = null,
 };
 
-const ZoneContext = struct {
+pub const ZoneContext = struct {
     ctx: c.___tracy_c_zone_context,
 
-    pub inline fn deinit(zone: ZoneContext) void {
+    pub inline fn end(zone: ZoneContext) void {
         if (!options.tracy_enable) return;
         c.___tracy_emit_zone_end(zone.ctx);
     }
@@ -115,7 +115,7 @@ const ZoneContext = struct {
     }
 };
 
-pub inline fn initZone(comptime src: std.builtin.SourceLocation, opts: ZoneOptions) ZoneContext {
+pub inline fn beginZone(comptime src: std.builtin.SourceLocation, opts: ZoneOptions) ZoneContext {
     if (!options.tracy_enable) return undefined;
     const active: c_int = @intFromBool(opts.active);
 
@@ -238,28 +238,28 @@ pub inline fn printAppInfo(comptime fmt: []const u8, args: anytype) void {
 
 // @TODO: Add explicit support for area allocators when the discard emit comes out in stable tracy
 pub const TracingAllocator = struct {
-    parent_allocator: std.mem.Allocator,
     pool_name: ?[:0]const u8,
+    backing_allocator: std.mem.Allocator,
 
     const Self = @This();
     const Alignment = std.mem.Alignment;
 
-    pub fn init(parent_allocator: std.mem.Allocator) Self {
+    pub fn init(backing_allocator: std.mem.Allocator) Self {
         return .{
-            .parent_allocator = parent_allocator,
+            .parent_allocator = backing_allocator,
             .pool_name = null,
         };
     }
 
     pub fn initNamed(pool_name: [:0]const u8, parent_allocator: std.mem.Allocator) Self {
         return .{
-            .parent_allocator = parent_allocator,
             .pool_name = pool_name,
+            .parent_allocator = parent_allocator,
         };
     }
 
     pub fn allocator(self: *Self) std.mem.Allocator {
-        if (!options.tracy_enable) return self.parent_allocator;
+        if (!options.tracy_enable) return self.backing_allocator;
 
         return .{
             .ptr = self,
@@ -274,7 +274,7 @@ pub const TracingAllocator = struct {
 
     fn alloc(ctx: *anyopaque, len: usize, alignment: Alignment, ret_addr: usize) ?[*]u8 {
         const self: *Self = @ptrCast(@alignCast(ctx));
-        const result = self.parent_allocator.rawAlloc(len, alignment, ret_addr);
+        const result = self.backing_allocator.rawAlloc(len, alignment, ret_addr);
 
         if (options.tracy_enable) {
             if (self.pool_name) |name| {
@@ -289,7 +289,7 @@ pub const TracingAllocator = struct {
 
     fn resize(ctx: *anyopaque, memory: []u8, alignment: Alignment, new_len: usize, ret_addr: usize) bool {
         const self: *Self = @ptrCast(@alignCast(ctx));
-        const result = self.parent_allocator.rawResize(memory, alignment, new_len, ret_addr);
+        const result = self.backing_allocator.rawResize(memory, alignment, new_len, ret_addr);
 
         if (options.tracy_enable) {
             if (self.pool_name) |name| {
@@ -306,12 +306,12 @@ pub const TracingAllocator = struct {
 
     fn remap(ctx: *anyopaque, memory: []u8, alignment: Alignment, new_len: usize, ret_addr: usize) ?[*]u8 {
         const self: *Self = @ptrCast(@alignCast(ctx));
-        return self.parent_allocator.rawRemap(memory, alignment, new_len, ret_addr);
+        return self.backing_allocator.rawRemap(memory, alignment, new_len, ret_addr);
     }
 
     fn free(ctx: *anyopaque, memory: []u8, alignment: Alignment, ret_addr: usize) void {
         const self: *Self = @ptrCast(@alignCast(ctx));
-        self.parent_allocator.rawFree(memory, alignment, ret_addr);
+        self.backing_allocator.rawFree(memory, alignment, ret_addr);
 
         if (options.tracy_enable) {
             if (self.pool_name) |name| {
