@@ -4,9 +4,9 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    // For example project tracy_enable defaults to true, but in real world projects tracy should never be on by default!
-    // Better to enable it in debug builds - but disable for release.
-    const tracy_enable = b.option(bool, "tracy_enable", "Enable profiling") orelse true;
+    const tracy_enable =
+        b.option(bool, "tracy_enable", "Enable profiling") orelse
+        if (optimize == .Debug) true else false;
 
     const tracy = b.dependency("tracy", .{
         .target = target,
@@ -20,8 +20,10 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
     mod.addImport("tracy", tracy.module("tracy"));
-    mod.linkLibrary(tracy.artifact("tracy"));
-    mod.link_libcpp = true;
+    if (tracy_enable) {
+        mod.linkLibrary(tracy.artifact("tracy"));
+        mod.link_libcpp = true;
+    }
 
     const exe = b.addExecutable(.{
         .name = "example",

@@ -27,8 +27,8 @@ pub fn main() !void {
     while (!finalise_threads.load(.acquire)) {
         tracy.frameMark();
 
-        const zone = tracy.initZone(@src(), .{ .name = "Important work" });
-        defer zone.deinit();
+        const zone = tracy.beginZone(@src(), .{ .name = "Important work" });
+        defer zone.end();
         std.time.sleep(100);
     }
 }
@@ -51,23 +51,23 @@ fn otherThread() void {
     const stdout = std.io.getStdOut().writer();
 
     while (!finalise_threads.load(.acquire)) {
-        const zone = tracy.initZone(@src(), .{ .name = "IO loop" });
-        defer zone.deinit();
+        const zone = tracy.beginZone(@src(), .{ .name = "IO loop" });
+        defer zone.end();
 
         stdout.print("Enter string: ", .{}) catch break;
 
-        const stream_zone = tracy.initZone(@src(), .{ .name = "Writer.streamUntilDelimiter" });
+        const stream_zone = tracy.beginZone(@src(), .{ .name = "Writer.streamUntilDelimiter" });
         stdin.streamUntilDelimiter(stack.writer(), '\n', null) catch break;
-        stream_zone.deinit();
+        stream_zone.end();
 
-        const toowned_zone = tracy.initZone(@src(), .{ .name = "ArrayList.toOwnedSlice" });
+        const toowned_zone = tracy.beginZone(@src(), .{ .name = "ArrayList.toOwnedSlice" });
         const str = stack.toOwnedSlice() catch break;
         defer tracing_allocator.allocator().free(str);
-        toowned_zone.deinit();
+        toowned_zone.end();
 
-        const reverse_zone = tracy.initZone(@src(), .{ .name = "std.mem.reverse" });
+        const reverse_zone = tracy.beginZone(@src(), .{ .name = "std.mem.reverse" });
         std.mem.reverse(u8, str);
-        reverse_zone.deinit();
+        reverse_zone.end();
 
         stdout.print("Reversed: {s}\n", .{str}) catch break;
     }
