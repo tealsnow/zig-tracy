@@ -5,8 +5,8 @@
     .minimum_zig_version = "0.14.0",
     .dependencies = .{
         .tracy_lib = .{
-            .url = "https://github.com/wolfpld/tracy/archive/refs/tags/v0.11.1.zip",
-            .hash = "N-V-__8AAMeOlQEipHjcyu0TCftdAi9AQe7EXUDJOoVe0k-t",
+            .url = "git+https://github.com/wolfpld/tracy#71fc3bc747f53bb8091f20fac186473d3e6a3003",
+            .hash = "N-V-__8AALJPPgExYN_hfn4AKwbZfcyf376q4NvUCbJ3wz4L",
         },
     },
     .paths = .{

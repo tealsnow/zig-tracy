@@ -4,7 +4,7 @@ pub const options = @import("tracy-options");
 const c = @cImport({
     if (options.tracy_enable) @cDefine("TRACY_ENABLE", {});
     if (options.tracy_on_demand) @cDefine("TRACY_ON_DEMAND", {});
-    if (options.tracy_callstack) |depth| @cDefine(std.fmt.comptimePrint("TRACY_CALLSTACK \"{d}\"", .{depth}), {});
+    if (options.tracy_callstack) |depth| @cDefine("TRACY_CALLSTACK", std.fmt.comptimePrint("\"{}\"", .{depth}));
     if (options.tracy_no_callstack) @cDefine("TRACY_NO_CALLSTACK", {});
     if (options.tracy_no_callstack_inlines) @cDefine("TRACY_NO_CALLSTACK_INLINES", {});
     if (options.tracy_only_localhost) @cDefine("TRACY_ONLY_LOCALHOST", {});
@@ -236,7 +236,6 @@ pub inline fn printAppInfo(comptime fmt: []const u8, args: anytype) void {
     c.___tracy_emit_message_appinfo(written.ptr, written.len);
 }
 
-// @TODO: Add explicit support for area allocators when the discard emit comes out in stable tracy
 pub const TracingAllocator = struct {
     pool_name: ?[:0]const u8,
     backing_allocator: std.mem.Allocator,
@@ -246,8 +245,8 @@ pub const TracingAllocator = struct {
 
     pub fn init(backing_allocator: std.mem.Allocator) Self {
         return .{
-            .backing_allocator = backing_allocator,
             .pool_name = null,
+            .backing_allocator = backing_allocator,
         };
     }
 
@@ -258,9 +257,17 @@ pub const TracingAllocator = struct {
         };
     }
 
-    pub fn allocator(self: *Self) std.mem.Allocator {
-        if (!options.tracy_enable) return self.backing_allocator;
+    pub fn discard(self: *Self) void {
+        if (!options.tracy_enable) return;
 
+        if (self.pool_name) |name| {
+            c.___tracy_emit_memory_discard(name.ptr, 0);
+        } else {
+            c.___tracy_emit_memory_discard(null, 0);
+        }
+    }
+
+    pub fn allocator(self: *Self) std.mem.Allocator {
         return .{
             .ptr = self,
             .vtable = &.{
@@ -306,7 +313,19 @@ pub const TracingAllocator = struct {
 
     fn remap(ctx: *anyopaque, memory: []u8, alignment: Alignment, new_len: usize, ret_addr: usize) ?[*]u8 {
         const self: *Self = @ptrCast(@alignCast(ctx));
-        return self.backing_allocator.rawRemap(memory, alignment, new_len, ret_addr);
+        const result = self.backing_allocator.rawRemap(memory, alignment, new_len, ret_addr);
+
+        if (options.tracy_enable) {
+            if (self.pool_name) |name| {
+                c.___tracy_emit_memory_free_named(memory.ptr, 0, name.ptr);
+                c.___tracy_emit_memory_alloc_named(memory.ptr, new_len, 0, name.ptr);
+            } else {
+                c.___tracy_emit_memory_free(memory.ptr, 0);
+                c.___tracy_emit_memory_alloc(memory.ptr, new_len, 0);
+            }
+        }
+
+        return result;
     }
 
     fn free(ctx: *anyopaque, memory: []u8, alignment: Alignment, ret_addr: usize) void {
