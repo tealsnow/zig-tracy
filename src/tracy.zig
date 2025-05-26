@@ -1,7 +1,7 @@
 const std = @import("std");
 const builtin = @import("builtin");
 pub const options = @import("tracy-options");
-const c = @cImport({
+const c = if (options.tracy_enable) @cImport({
     if (options.tracy_enable) @cDefine("TRACY_ENABLE", {});
     if (options.tracy_on_demand) @cDefine("TRACY_ON_DEMAND", {});
     if (options.tracy_callstack) |depth| @cDefine(std.fmt.comptimePrint("TRACY_CALLSTACK \"{d}\"", .{depth}), {});
@@ -26,7 +26,7 @@ const c = @cImport({
     if (options.shared and builtin.os.tag == .windows) @cDefine("TRACY_IMPORTS", {});
 
     @cInclude("tracy/TracyC.h");
-});
+}) else void;
 
 pub inline fn setThreadName(name: [:0]const u8) void {
     if (!options.tracy_enable) return;
