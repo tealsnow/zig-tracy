@@ -48,47 +48,51 @@ pub fn build(b: *std.Build) void {
         },
     });
 
-    mod.addIncludePath(c_tracy.path("public"));
+    // Avoid building Tracy completely if it is disabled.
 
-    if (target.result.os.tag == .windows) {
-        mod.linkSystemLibrary("dbghelp", .{ .needed = true });
-        mod.linkSystemLibrary("ws2_32", .{ .needed = true });
+    if (tracy_enable) {
+        mod.addIncludePath(c_tracy.path("public"));
+
+        if (target.result.os.tag == .windows) {
+            mod.linkSystemLibrary("dbghelp", .{ .needed = true });
+            mod.linkSystemLibrary("ws2_32", .{ .needed = true });
+        }
+        mod.link_libcpp = true;
+        mod.addCSourceFile(.{
+            .file = c_tracy.path("public/TracyClient.cpp"),
+        });
+
+        if (tracy_enable) mod.addCMacro("TRACY_ENABLE", "");
+        if (tracy_on_demand) mod.addCMacro("TRACY_ON_DEMAND", "");
+        if (tracy_callstack) |depth| mod.addCMacro(b.fmt("TRACY_CALLSTACK \"{d}\"", .{depth}), "");
+        if (tracy_no_callstack) mod.addCMacro("TRACY_NO_CALLSTACK", "");
+        if (tracy_no_callstack_inlines) mod.addCMacro("TRACY_NO_CALLSTACK_INLINES", "");
+        if (tracy_only_localhost) mod.addCMacro("TRACY_ONLY_LOCALHOST", "");
+        if (tracy_no_broadcast) mod.addCMacro("TRACY_NO_BROADCAST", "");
+        if (tracy_only_ipv4) mod.addCMacro("TRACY_ONLY_IPV4", "");
+        if (tracy_no_code_transfer) mod.addCMacro("TRACY_NO_CODE_TRANSFER", "");
+        if (tracy_no_context_switch) mod.addCMacro("TRACY_NO_CONTEXT_SWITCH", "");
+        if (tracy_no_exit) mod.addCMacro("TRACY_NO_EXIT", "");
+        if (tracy_no_sampling) mod.addCMacro("TRACY_NO_SAMPLING", "");
+        if (tracy_no_verify) mod.addCMacro("TRACY_NO_VERIFY", "");
+        if (tracy_no_vsync_capture) mod.addCMacro("TRACY_NO_VSYNC_CAPTURE", "");
+        if (tracy_no_frame_image) mod.addCMacro("TRACY_NO_FRAME_IMAGE", "");
+        if (tracy_no_system_tracing) mod.addCMacro("TRACY_NO_SYSTEM_TRACING", "");
+        if (tracy_delayed_init) mod.addCMacro("TRACY_DELAYED_INIT", "");
+        if (tracy_manual_lifetime) mod.addCMacro("TRACY_MANUAL_LIFETIME", "");
+        if (tracy_fibers) mod.addCMacro("TRACY_FIBERS", "");
+        if (tracy_no_crash_handler) mod.addCMacro("TRACY_NO_CRASH_HANDLER", "");
+        if (tracy_timer_fallback) mod.addCMacro("TRACY_TIMER_FALLBACK", "");
+        if (shared and target.result.os.tag == .windows) mod.addCMacro("TRACY_EXPORTS", "");
+
+        const lib = b.addLibrary(.{
+            .linkage = if (shared) .dynamic else .static,
+            .name = "tracy",
+            .root_module = mod,
+        });
+
+        b.installArtifact(lib);
     }
-    mod.link_libcpp = true;
-    mod.addCSourceFile(.{
-        .file = c_tracy.path("public/TracyClient.cpp"),
-    });
-
-    if (tracy_enable) mod.addCMacro("TRACY_ENABLE", "");
-    if (tracy_on_demand) mod.addCMacro("TRACY_ON_DEMAND", "");
-    if (tracy_callstack) |depth| mod.addCMacro(b.fmt("TRACY_CALLSTACK \"{d}\"", .{depth}), "");
-    if (tracy_no_callstack) mod.addCMacro("TRACY_NO_CALLSTACK", "");
-    if (tracy_no_callstack_inlines) mod.addCMacro("TRACY_NO_CALLSTACK_INLINES", "");
-    if (tracy_only_localhost) mod.addCMacro("TRACY_ONLY_LOCALHOST", "");
-    if (tracy_no_broadcast) mod.addCMacro("TRACY_NO_BROADCAST", "");
-    if (tracy_only_ipv4) mod.addCMacro("TRACY_ONLY_IPV4", "");
-    if (tracy_no_code_transfer) mod.addCMacro("TRACY_NO_CODE_TRANSFER", "");
-    if (tracy_no_context_switch) mod.addCMacro("TRACY_NO_CONTEXT_SWITCH", "");
-    if (tracy_no_exit) mod.addCMacro("TRACY_NO_EXIT", "");
-    if (tracy_no_sampling) mod.addCMacro("TRACY_NO_SAMPLING", "");
-    if (tracy_no_verify) mod.addCMacro("TRACY_NO_VERIFY", "");
-    if (tracy_no_vsync_capture) mod.addCMacro("TRACY_NO_VSYNC_CAPTURE", "");
-    if (tracy_no_frame_image) mod.addCMacro("TRACY_NO_FRAME_IMAGE", "");
-    if (tracy_no_system_tracing) mod.addCMacro("TRACY_NO_SYSTEM_TRACING", "");
-    if (tracy_delayed_init) mod.addCMacro("TRACY_DELAYED_INIT", "");
-    if (tracy_manual_lifetime) mod.addCMacro("TRACY_MANUAL_LIFETIME", "");
-    if (tracy_fibers) mod.addCMacro("TRACY_FIBERS", "");
-    if (tracy_no_crash_handler) mod.addCMacro("TRACY_NO_CRASH_HANDLER", "");
-    if (tracy_timer_fallback) mod.addCMacro("TRACY_TIMER_FALLBACK", "");
-    if (shared and target.result.os.tag == .windows) mod.addCMacro("TRACY_EXPORTS", "");
-
-    const lib = b.addLibrary(.{
-        .linkage = if (shared) .dynamic else .static,
-        .name = "tracy",
-        .root_module = mod,
-    });
-
-    b.installArtifact(lib);
 }
 
 pub fn option(
