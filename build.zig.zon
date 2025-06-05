@@ -1,12 +1,12 @@
 .{
     .name = .tracy,
-    .version = "0.0.9",
+    .version = "0.0.10",
     .fingerprint = 0x255a89ee9b3d7e0e, // Changing this has security and trust implications.
     .minimum_zig_version = "0.14.0",
     .dependencies = .{
         .tracy_lib = .{
-            .url = "git+https://github.com/wolfpld/tracy#71fc3bc747f53bb8091f20fac186473d3e6a3003",
-            .hash = "N-V-__8AALJPPgExYN_hfn4AKwbZfcyf376q4NvUCbJ3wz4L",
+            .url = "https://github.com/wolfpld/tracy/archive/refs/tags/v0.12.0.zip",
+            .hash = "N-V-__8AABI9PwGkEDxc-gkF60lgvJ3cKJv44jVYIWomN7dW",
         },
     },
     .paths = .{
