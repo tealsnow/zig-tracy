@@ -28,10 +28,21 @@ const c = if (options.tracy_enable) @cImport({
     @cInclude("tracy/TracyC.h");
 }) else void;
 
-pub inline fn setThreadName(name: [:0]const u8) void {
-    if (!options.tracy_enable) return;
-    c.___tracy_set_thread_name(name);
+//= format
+
+const tracy_message_buffer_size = if (options.tracy_enable) 4096 else 0;
+threadlocal var tracy_message_buffer: [tracy_message_buffer_size]u8 = undefined;
+
+inline fn format(comptime fmt: []const u8, args: anytype) [:0]const u8 {
+    return std.fmt.bufPrintZ(&tracy_message_buffer, fmt, args) catch {
+        std.log.warn("formated text larger than {} bytes", .{tracy_message_buffer_size});
+        std.log.warn("message:", .{});
+        std.log.warn(fmt, args);
+        return "<message too large>";
+    };
 }
+
+//= connection
 
 pub inline fn startupProfiler() void {
     if (!options.tracy_enable) return;
@@ -49,6 +60,38 @@ pub inline fn isConnected() bool {
     if (!options.tracy_enable) return false;
     return c.___tracy_connected() > 0;
 }
+
+//= print info
+
+pub inline fn setThreadName(name: [:0]const u8) void {
+    if (!options.tracy_enable) return;
+    c.___tracy_set_thread_name(name);
+}
+
+pub inline fn printAppInfo(comptime fmt: []const u8, args: anytype) void {
+    if (!options.tracy_enable) return;
+
+    const string = format(fmt, args);
+    c.___tracy_emit_message_appinfo(string.ptr, string.len);
+}
+
+pub inline fn message(comptime fmt: []const u8, args: anytype) void {
+    if (!options.tracy_enable) return;
+    const depth = options.tracy_callstack orelse 0;
+
+    const string = format(fmt, args);
+    c.___tracy_emit_message(string.ptr, string.len, depth);
+}
+
+pub inline fn messageColor(comptime fmt: []const u8, args: anytype, color: u32) void {
+    if (!options.tracy_enable) return;
+    const depth = options.tracy_callstack orelse 0;
+
+    const string = format(fmt, args);
+    c.___tracy_emit_messageC(string.ptr, string.len, color, depth);
+}
+
+//= frames
 
 pub inline fn frameMark() void {
     if (!options.tracy_enable) return;
@@ -69,8 +112,8 @@ pub const DiscontinuousFrame = struct {
     }
 };
 
-pub inline fn startDiscontinuousFrame(comptime name: [:0]const u8) DiscontinuousFrame {
-    if (!options.tracy_enable) return .{ .name = name };
+pub inline fn startDiscontinuousFrame(name: [:0]const u8) DiscontinuousFrame {
+    if (!options.tracy_enable) return .{ .name = "" };
     c.___tracy_emit_frame_mark_start(name);
     return .{ .name = name };
 }
@@ -79,6 +122,8 @@ pub inline fn frameImage(image: *anyopaque, width: u16, height: u16, offset: u8,
     if (!options.tracy_enable) return;
     c.___tracy_emit_frame_image(image, width, height, offset, @as(c_int, @intFromBool(flip)));
 }
+
+//= zones
 
 pub const ZoneOptions = struct {
     active: bool = true,
@@ -94,14 +139,16 @@ pub const ZoneContext = struct {
         c.___tracy_emit_zone_end(zone.ctx);
     }
 
-    pub inline fn name(zone: ZoneContext, zone_name: []const u8) void {
+    pub inline fn name(zone: ZoneContext, comptime fmt: []const u8, args: anytype) void {
         if (!options.tracy_enable) return;
-        c.___tracy_emit_zone_name(zone.ctx, zone_name.ptr, zone_name.len);
+        const string = format(fmt, args);
+        c.___tracy_emit_zone_name(zone.ctx, string.ptr, string.len);
     }
 
-    pub inline fn text(zone: ZoneContext, zone_text: []const u8) void {
+    pub inline fn text(zone: ZoneContext, comptime fmt: []const u8, args: anytype) void {
         if (!options.tracy_enable) return;
-        c.___tracy_emit_zone_text(zone.ctx, zone_text.ptr, zone_text.len);
+        const string = format(fmt, args);
+        c.___tracy_emit_zone_text(zone.ctx, string.ptr, string.len);
     }
 
     pub inline fn color(zone: ZoneContext, zone_color: u32) void {
@@ -140,28 +187,7 @@ pub inline fn beginZone(comptime src: std.builtin.SourceLocation, opts: ZoneOpti
     };
 }
 
-pub inline fn plot(comptime T: type, name: [:0]const u8, value: T) void {
-    if (!options.tracy_enable) return;
-
-    const type_info = @typeInfo(T);
-    switch (type_info) {
-        .int => |int_type| {
-            if (int_type.bits > 64) @compileError("Too large int to plot");
-            if (int_type.signedness == .unsigned and int_type.bits > 63) @compileError("Too large unsigned int to plot");
-            c.___tracy_emit_plot_int(name, @intCast(value));
-        },
-        .float => |float_type| {
-            if (float_type.bits <= 32) {
-                c.___tracy_emit_plot_float(name, @floatCast(value));
-            } else if (float_type.bits <= 64) {
-                c.___tracy_emit_plot(name, @floatCast(value));
-            } else {
-                @compileError("Too large float to plot");
-            }
-        },
-        else => @compileError("Unsupported plot value type"),
-    }
-}
+//= plots
 
 pub const PlotType = enum(c.TracyPlotFormatEnum) {
     Number = c.TracyPlotFormatNumber,
@@ -188,53 +214,30 @@ pub inline fn plotConfig(name: [:0]const u8, config: PlotConfig) void {
     );
 }
 
-pub inline fn message(msg: [:0]const u8) void {
-    if (!options.tracy_enable) return;
-    const depth = options.tracy_callstack orelse 0;
-    c.___tracy_emit_messageL(msg, depth);
-}
-
-pub inline fn messageColor(msg: [:0]const u8, color: u32) void {
-    if (!options.tracy_enable) return;
-    const depth = options.tracy_callstack orelse 0;
-    c.___tracy_emit_messageLC(msg, color, depth);
-}
-
-const tracy_message_buffer_size = if (options.tracy_enable) 4096 else 0;
-threadlocal var tracy_message_buffer: [tracy_message_buffer_size]u8 = undefined;
-
-pub inline fn print(comptime fmt: []const u8, args: anytype) void {
-    if (!options.tracy_enable) return;
-    const depth = options.tracy_callstack orelse 0;
-
-    var stream = std.io.fixedBufferStream(&tracy_message_buffer);
-    stream.writer().print(fmt, args) catch {};
-
-    const written = stream.getWritten();
-    c.___tracy_emit_message(written.ptr, written.len, depth);
-}
-
-pub inline fn printColor(comptime fmt: []const u8, args: anytype, color: u32) void {
-    if (!options.tracy_enable) return;
-    const depth = options.tracy_callstack orelse 0;
-
-    var stream = std.io.fixedBufferStream(&tracy_message_buffer);
-    stream.writer().print(fmt, args) catch {};
-
-    const written = stream.getWritten();
-    c.___tracy_emit_messageC(written.ptr, written.len, color, depth);
-}
-
-pub inline fn printAppInfo(comptime fmt: []const u8, args: anytype) void {
+pub inline fn plot(name: [:0]const u8, value: anytype) void {
     if (!options.tracy_enable) return;
 
-    var stream = std.io.fixedBufferStream(&tracy_message_buffer);
-    stream.reset();
-    stream.writer().print(fmt, args) catch {};
-
-    const written = stream.getWritten();
-    c.___tracy_emit_message_appinfo(written.ptr, written.len);
+    const type_info = @typeInfo(@TypeOf(value));
+    switch (type_info) {
+        .int => |int_type| {
+            if (int_type.bits > 64) @compileError("Too large int to plot");
+            if (int_type.signedness == .unsigned and int_type.bits > 63) @compileError("Too large unsigned int to plot");
+            c.___tracy_emit_plot_int(name, @intCast(value));
+        },
+        .float => |float_type| {
+            if (float_type.bits <= 32) {
+                c.___tracy_emit_plot_float(name, @floatCast(value));
+            } else if (float_type.bits <= 64) {
+                c.___tracy_emit_plot(name, @floatCast(value));
+            } else {
+                @compileError("Too large float to plot");
+            }
+        },
+        else => @compileError("Unsupported plot value type"),
+    }
 }
+
+//= allocators
 
 pub const TracingAllocator = struct {
     pool_name: ?[:0]const u8,
