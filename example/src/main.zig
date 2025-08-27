@@ -9,7 +9,7 @@ fn handleSigInt(_: c_int) callconv(.C) void {
 
 pub fn main() !void {
     tracy.setThreadName("Main");
-    defer tracy.message("Graceful main thread exit");
+    defer tracy.message("Graceful main thread exit", .{});
 
     std.posix.sigaction(
         std.posix.SIG.INT,
@@ -35,7 +35,7 @@ pub fn main() !void {
 
 fn otherThread() void {
     tracy.setThreadName("Other");
-    defer tracy.message("Graceful other thread exit");
+    defer tracy.message("Graceful other thread exit", .{});
 
     var os_allocator = tracy.TracingAllocator.init(std.heap.page_allocator);
 
